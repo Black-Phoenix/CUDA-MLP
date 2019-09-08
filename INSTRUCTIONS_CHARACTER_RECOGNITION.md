@@ -1,6 +1,8 @@
 # CUDA - Character Recognition
 
-**Summary:** For this homework assignment, you'll be implementing a small neural network for recognizing characters from very simplified black and white images.We've given you the bitmap compression methods; however, a lot of the rest of the neural network implementation is up to you. We have provided an explanation of steps to create a fully functioning network with a few perceptron layers; however, if you'd like to make your implementation more detailed, feel free to do so. Make sure to speak with the TAs if you have ideas for extra credit or would like to go more in depth with your approach.
+**Summary:** For this homework assignment, you'll be implementing a small neural network for recognizing characters from very simplified black and white images.We've given you the bitmap compression methods; however, a lot of the rest of the neural network implementation is up to you.
+
+*Note: We have provided an explanation of steps to create a fully functioning network with a few perceptron layers; however, if you'd like to make your implementation more detailed, feel free to do so. Make sure to speak with the TAs if you have ideas for [extra credit](#Optional-Extra-Credit) or would like to go more in depth with your approach.*
 
 ## Part 0: Build
 
@@ -34,11 +36,11 @@ For all instances regarding the multi-layer perceptron, variables `k`, `j`, and 
 
 Each time this multi-layer is run through, an error in the difference between the actual output and the theoretical output due to each specific weight is calculated. This value is then multiplied by a negative lambda value to give the delta to be added to that specific weight to lessen the error in the overall system.
 
-**The formulas used in this perceptron along with further explanations of the mathematical reasoning behind this model can be found in the [RECITATION PDF.](./Minimizing-and-Optimizing-the-Error-Function.pdf).**
+**The formulas used in this perceptron along with further explanations of the mathematical reasoning behind this model can be found in the [RECITATION PDF](./Minimizing-and-Optimizing-the-Error-Function.pdf).**
 
 ### Part 1.1: Creating your Multi-layer Perceptron
 
-Create three float buffers such that one corresponds to each of the following
+Create three buffers such that one corresponds to each of the following
 - input
 - hidden layers
 - output
@@ -71,18 +73,18 @@ Try to get your project fully working, but we will grade this section based on h
 
 ## Part 4: Write-up
 
-1. Take a screenshot of the written output you have confirming final error in relation to your network and its target values (ie how close did it get to being able to determine if an image contains a specific character).
-Put this at the top of your README.md. Take a look at [How to make an attractive
-GitHub repo](https://github.com/pjcozzi/Articles/blob/master/CIS565/GitHubRepo/README.md).
+1. Take a screenshot of the written output you have confirming final error in relation to your network and its target values (ie how close did it get to being able to determine if an image contains a specific character). Put this at the top of your README.md. Take a look at [How to make an attractive GitHub repo](https://github.com/pjcozzi/Articles/blob/master/CIS565/GitHubRepo/README.md).
 2. Add your performance analysis. Graphs to include:
-- Framerate change with increasing # layers in your perceptron, framerate change with increasing # of hidden perceptron layers (if you'd like to do this), framerate change for larger image sizes as input in comparison to smaller image sizes, etc)
+- Framerate change with increasing # layers in your perceptron
+- Framerate change with increasing # of hidden perceptron layers (if you'd like to do this)
+- Framerate change for larger image sizes as input in comparison to smaller image sizes
+- If you implemented Extra credit, make sure to include graph comparisons for those
 3. If you do any extra credit, make sure to note it in your readme (otherwise we won't give credit for it).
 
 ## Tips
 - If your simulation crashes before launch, use `checkCUDAErrorWithLine("message")` after CUDA invocations
 - `ctrl + f5` in Visual Studio will launch the program but won't let the window close if the program crashes. This way you can see any `checkCUDAErrorWithLine` output.
 - For debugging purposes, you can transfer data to and from the GPU. See `Boids::unitTest` from Project1's `kernel.cu` for an example of how to use this.
-- For high DPI displays like 4K monitors or the Macbook Pro with Retina Display, you might want to double the rendering resolution and point size. See `main.hpp`.
 - Your README.md will be done in github markdown. You can find a [cheatsheet here](https://guides.github.com/pdfs/markdown-cheatsheet-online.pdf). There is also a [live preview plugin](https://atom.io/packages/markdown-preview) for the [atom text editor](https://atom.io/) from github. The same for [VS Code](https://www.visualstudio.com/en-us/products/code-vs.aspx)
 
 ## Optional Extra Credit:
