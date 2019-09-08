@@ -7,10 +7,8 @@
  */
 
 #include <cstdio>
-#include <stream_compaction/cpu.h>
-#include <stream_compaction/naive.h>
-#include <stream_compaction/efficient.h>
-#include <stream_compaction/thrust.h>
+#include <character_recognition/mlp.h>
+#include <character_recognition/common.h>
 #include "testing_helpers.hpp"
 
 const int SIZE = 1 << 8; // feel free to change the size of array

@@ -26,6 +26,7 @@ add_subdirectory(character_recognition)
 
 cuda_add_executable(${CMAKE_PROJECT_NAME}
     "src/main.cpp"
+	"src/testing_helpers.hpp"
     )
 
 target_link_libraries(${CMAKE_PROJECT_NAME}

@@ -1,14 +1,8 @@
 set(SOURCE_FILES
     "common.h"
     "common.cu"
-    "cpu.h"
-    "cpu.cu"
-    "naive.h"
-    "naive.cu"
-    "efficient.h"
-    "efficient.cu"
-    "thrust.h"
-    "thrust.cu"
+    "mlp.h"
+    "mlp.cu"
     )
 
 cuda_add_library(character_recognition

@@ -20,6 +20,15 @@ Please run the project without modifications to ensure that everything works cor
 
 **NOTE: Build the project in `release` mode for performance analysis and capturing.**
 
+### 0.2 Useful existing code && where to write things
+
+* `character_recognition/common.h`
+  * `checkCUDAError` macro: checks for CUDA errors and exits if there were any.
+  * `ilog2ceil(x)`: computes the ceiling of log2(x), as an integer.
+* `main.cpp`
+  * Implement the network to run here
+* Make sure your startup project is set to `cis565_character_recognition`. All your MLP/neuralnetwork code implementation will be in the `character_recognition` project.
+
 ## Part 1: Multi-layer Perceptron
 
 ### Part 1.0: What is a Perceptron and how will it be used in this assignment?
