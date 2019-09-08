@@ -22,6 +22,8 @@ Please run the project without modifications to ensure that everything works cor
 
 ### Part 1.0: What is a Perceptron and how will it be used in this assignment?
 
+![](./img/MLP.png)
+
 A single-layered perceptron works as follows. Throughout the entire process the data follows the feed forward method. This method indicates that data can only pass from one column to the next, traveling only in the input to output direction. To begin, a set of data is inputted into the perceptron. This data is then multiplied by a series of activation weights corresponding to the input’s location and the output layer's location. These weights are used to determine the importance or the "weight" each specific input will have in determining the output. All of these products with the same corresponding output location are then summed up and put through the activation function. This function determines, based on what the user wants, whether or not the output is above the user-specified threshold (just like in circuits).
 
 For our purposes we are using f(x) = 1/(1+e^-x). Depending on the output of this function, the output of the specified node will be considered as “on” or “off.” For our purposes with the multi-layered perceptron, we are hooking up two layers of perceptrons; therefore, we are ultimately working with three layers.
@@ -32,7 +34,7 @@ For all instances regarding the multi-layer perceptron, variables `k`, `j`, and 
 
 Each time this multi-layer is run through, an error in the difference between the actual output and the theoretical output due to each specific weight is calculated. This value is then multiplied by a negative lambda value to give the delta to be added to that specific weight to lessen the error in the overall system.
 
-The formulas used in this perceptron along with further explanations of the mathematical reasoning behind this model can be found in the pdf that's included [here](./'Minimizing-and-Optimizing-the-Error-Function.pdf').
+The formulas used in this perceptron along with further explanations of the mathematical reasoning behind this model can be found in the pdf that's included [here](./Minimizing-and-Optimizing-the-Error-Function.pdf).
 
 ### Part 1.1: Creating your Multi-layer Perceptron
 
