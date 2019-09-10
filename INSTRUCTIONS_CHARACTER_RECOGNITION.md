@@ -1,4 +1,5 @@
-# CUDA - Character Recognition
+CUDA - Character Recognition
+========================
 
 **Summary:** For this homework assignment, you'll be implementing a small neural network for recognizing characters from very simplified black and white images.We've given you the bitmap compression methods; however, a lot of the rest of the neural network implementation is up to you.
 
