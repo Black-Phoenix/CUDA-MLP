@@ -7,5 +7,5 @@ set(SOURCE_FILES
 
 cuda_add_library(character_recognition
     ${SOURCE_FILES}
-    OPTIONS -arch=sm_20
+    OPTIONS -arch=sm_30
     )
