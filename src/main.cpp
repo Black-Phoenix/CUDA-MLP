@@ -14,8 +14,8 @@
 //#include <opencv2/core/core.hpp>
 #include <windows.h>
 //#include <opencv2/highgui/highgui.hpp>
-
-#define classes 5
+#define inputs 196
+#define classes 52
 using namespace std;
 //int image_read(string path) {
 //	cv::Mat image = cv::imread(path.c_str(), 0);
@@ -52,10 +52,11 @@ int main(int argc, char* argv[]) {
 	for (auto x : files)
 		cout << x << endl;*/
 	// test forward pass
-	CharacterRecognition::Net nn(5, {classes});
-	float data[classes] = {1, 1, 1, 1, 1};
-	auto x = nn.forward(data, 5);
-	float sum = 0;
+	CharacterRecognition::Net nn(inputs, {98, 52, 52, classes});
+	double data[inputs] = {0};
+	auto x = nn.forward(data, inputs);
+//	nn.backprop(data);
+	double sum = 0;
 	for (int i = 0; i < classes; i++) {
 		cout << x[i] << ", " << endl;
 		sum += x[i];
