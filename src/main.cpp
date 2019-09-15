@@ -16,6 +16,7 @@
 //#include <opencv2/highgui/highgui.hpp>
 #define inputs 196
 #define classes 52
+#define lr 0.2
 using namespace std;
 //int image_read(string path) {
 //	cv::Mat image = cv::imread(path.c_str(), 0);
@@ -52,7 +53,7 @@ int main(int argc, char* argv[]) {
 	for (auto x : files)
 		cout << x << endl;*/
 	// test forward pass
-	CharacterRecognition::Net nn(inputs, {98, 52, 52, classes});
+	CharacterRecognition::Net nn(inputs, {98, 52, 52, classes}, lr);
 	double data[inputs] = {0};
 	auto x = nn.forward(data, inputs);
 //	nn.backprop(data);
