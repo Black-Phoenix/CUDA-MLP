@@ -28,12 +28,14 @@ namespace CharacterRecognition {
 		cout << "}" << endl;
 		delete[]print_a;
 	}
-
-	__global__ void bias_addition(int n, float *A, float *B, float *C) {
+	//////////////////////////////
+	/*			KERNALS			*/	
+	//////////////////////////////
+	__global__ void bias_addition(int n, float *A, float *B, float *C, int sign = 1) { // change sign for subtraction or scaled addition
 		int index = threadIdx.x + (blockIdx.x * blockDim.x);
 		if (index >= n)
 			return;
-		C[index] = A[index] + B[index];
+		C[index] = A[index] + sign*B[index];
 	}
 
 	__global__ void relu_activation(int n, float *A, float *C) {
@@ -41,6 +43,13 @@ namespace CharacterRecognition {
 		if (index >= n)
 			return;
 		C[index] = max(0.0f, A[index]);
+	}
+	
+	__global__ void relu_grad(int n, float *g, float * grad) { // assumes grad is a 2d array of size n x n
+		int index = threadIdx.x + (blockIdx.x * blockDim.x);
+		if (index >= n)
+			return;
+		grad[index * n + index] = max(0.0f, g[index]); // makes a diagona matrix
 	}
 
 	__global__ void softmax_activation(int n, float *A, float *C, float exp_sum) {
@@ -50,6 +59,13 @@ namespace CharacterRecognition {
 		C[index] = expf(A[index]) / exp_sum;
 	}
 
+	__global__ void softmax_grad(int n, float *g, float * grad) {
+		int index_i = threadIdx.x + (blockIdx.x * blockDim.x);
+		int index_j = threadIdx.y + (blockIdx.y * blockDim.y);
+		if (index_i >= n || index_j >= n)
+			return;
+		grad[index_i * n + index_j] = g[index_i] * ((index_i == index_j) - g[index_j]);
+	}
 
 	__global__ void scan(int n, float *data, int d) {// function to get sum (for softmax layer)
 		int tmp_d = 1 << (d + 1);
@@ -80,6 +96,7 @@ namespace CharacterRecognition {
 			c[row * k + col] = sum;
 		}
 	}
+
 	__global__ void fill_data(int n, float *data, float val) {
 		int index = (blockDim.x * blockIdx.x + threadIdx.x);
 		if (index >= n)
@@ -87,6 +104,10 @@ namespace CharacterRecognition {
 		data[index] = val;
 	}
 
+	//////////////////////////////
+	/*			Helper			*/
+	//////////////////////////////
+	
 	void Net::GPU_fill_rand(float *A, int size, float std) {
 		// Create a pseudo-random number generator
 		curandGenerator_t prng;
@@ -96,30 +117,44 @@ namespace CharacterRecognition {
 		curandSetPseudoRandomGeneratorSeed(prng, clock());
 
 		// Fill the array with random numbers on the device
-		curandGenerateNormal(prng, A, size, 0, std);
+		curandGenerateUniform(prng, A, size);
 	}
-
 
 	Net::Net(int n, vector<int> layers) : input_size(n), layer_sizes(layers) {
 		// layers = {98, 52, 52}
+		layer_count = layers.size();
 		layers.insert(layers.begin(), n);
-		float *dev_w, *dev_b, *dev_g, *dev_a;
+		float *dev_w, *dev_b, *dev_g, *dev_a, *dev_jac;
 		int blocks;
-		for (int i = 0; i < layers.size() - 1; i++) {
+		for (int i = 0; i < layer_count; i++) {
 			cudaMalloc((void**)&dev_w, (layers[i] * layers[i + 1]) * sizeof(float));
+			checkCUDAErrorWithLine("Cuda malloc failed!");
 			cudaMalloc((void**)&dev_b, (layers[i + 1]) * sizeof(float));
+			checkCUDAErrorWithLine("Cuda malloc failed!");
 			// initilize w, b using gaussian distribution
-			GPU_fill_rand(dev_w, layers[i] * layers[i + 1], 2.0 / layers[i]); // henormal initilization
+			GPU_fill_rand(dev_w, layers[i] * layers[i + 1], 2.0 / layers[i]); // uniform random initilization
 			printCuda(dev_w, layers[i] * layers[i + 1], "W fresh");
 			GPU_fill_rand(dev_b, layers[i + 1], 0.1f); // zero initilizaton is fine for biases
 			// push into vector
 			w.push_back(dev_w);
 			b.push_back(dev_b);
-			// int results
+			// intermediate results arrays
 			cudaMalloc((void**)&dev_g, (layers[i + 1]) * sizeof(float));
+			checkCUDAErrorWithLine("Cuda malloc failed!");
 			cudaMalloc((void**)&dev_a, (layers[i + 1]) * sizeof(float));
+			checkCUDAErrorWithLine("Cuda malloc failed!");
 			g.push_back(dev_g);
 			a.push_back(dev_a);
+			// grad arrays
+			cudaMalloc((void**)&dev_w, (layers[i] * layers[i + 1]) * sizeof(float));
+			checkCUDAErrorWithLine("Cuda malloc failed!");
+			dL_dw.push_back(dev_w);
+			cudaMalloc((void**)&dev_b, (layers[i + 1]) * sizeof(float));
+			checkCUDAErrorWithLine("Cuda malloc failed!");
+			dL_db.push_back(dev_b);
+			cudaMalloc((void**)&dev_jac, (layers[i + 1]) * (layers[i + 1]) * sizeof(float));
+			checkCUDAErrorWithLine("Cuda malloc failed!");
+			da_dg.push_back(dev_jac); // da/dg has dimensions output(g) * output(g) <Jacobian>
 		}
 		// initilizaton cublas handle
 		cublasCreate(&handle);
@@ -136,15 +171,13 @@ namespace CharacterRecognition {
 		cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
 	}
 
-	
-
 	float* Net::forward(float *data, int n) {
-		float *res = new float[classes]();
+		float *res = new float[layer_sizes[layer_count - 1]]();
 		assert(n == input_size);
 		float *dev_data;
 		cudaMalloc((void**)&dev_data, n * sizeof(float));
 		cudaMemcpy(dev_data, data, n * sizeof(float), cudaMemcpyHostToDevice);
-		for (int i = 0; i < layer_sizes.size(); i++) {
+		for (int i = 0; i < layer_count; i++) {
 			blocks = ceil((layer_sizes[i] + block_size - 1) / block_size);
 			// clear g, a for this layer
 			cudaMemset(g[i], 0, layer_sizes[i] * sizeof(float));
@@ -165,7 +198,7 @@ namespace CharacterRecognition {
 			// bias addition
 			bias_addition << <blocks, block_size >> > (layer_sizes[i], g[i], b[i], g[i]); // put result back into g[i]
 			checkCUDAErrorWithLine("bias addition failed!");
-			if (i != layer_sizes.size() - 1) {
+			if (i != layer_count - 1) {
 				// relu activation
 				relu_activation << <blocks, block_size >> > (layer_sizes[i], g[i], a[i]);
 				checkCUDAErrorWithLine("relu failed!");
@@ -173,7 +206,7 @@ namespace CharacterRecognition {
 			else {
 				exp_copy << <blocks, block_size >> > (layer_sizes[i], a[i], g[i]);
 				checkCUDAErrorWithLine("exp copy failed!");
-				// todo optimize this later
+				// todo move this to the gpu this later
 				float *tmp = new float[layer_sizes[i]];
 				float exp_sum = 0;
 				cudaMemcpy(tmp, a[i], layer_sizes[i] * sizeof(float), cudaMemcpyDeviceToHost);
@@ -181,27 +214,21 @@ namespace CharacterRecognition {
 					exp_sum += tmp[pos];
 				delete[] tmp;
 				// modified scan to get the exponential sum of all elements (P1 of assignment used!!)
-				//int closest_pow2 = 1 << ilog2ceil(layer_sizes[i]);
-				//int blocks_scan;
-				//for (int d = 0; d <= ilog2ceil(closest_pow2) - 1; d++) {
-				//	// compute number of threads to spawn
-				//	blocks_scan = ceil((closest_pow2 / (1 << (d + 1)) + block_size - 1) / block_size);
-				//	scan<<<blocks_scan, block_size>>>(closest_pow2, a[i], d);
-				//	checkCUDAErrorWithLine("scan failed!");
-				//}
-				//cudaMemcpy(&exp_sum, a[i] + closest_pow2 - 1, sizeof(float), cudaMemcpyDeviceToHost);
 				// softmax activation
 				checkCUDAErrorWithLine("Cuda memcpy failed!");
 				softmax_activation << <blocks, block_size >> > (layer_sizes[i], g[i], a[i], exp_sum);
 				checkCUDAErrorWithLine("softmax failed!");
 			}
 		}
-		cudaMemcpy(res, a[layer_sizes.size() - 1], classes * sizeof(float), cudaMemcpyDeviceToHost);
+		cudaMemcpy(res, a[layer_count - 1], layer_sizes[layer_count - 1] * sizeof(float), cudaMemcpyDeviceToHost);
 		checkCUDAErrorWithLine("Cuda res memcpy failed!");
 		return res;
 	}
 
+	void Net::backprop(int *output) {
+		// call softmax with correct number of threads
 
+	}
 	Net::~Net() {
 		// free weights and biases
 		for (auto x : w)
@@ -212,6 +239,13 @@ namespace CharacterRecognition {
 		for (auto x : g)
 			cudaFree(x);
 		for (auto x : a)
+			cudaFree(x);
+		// grads
+		for (auto x : dL_dw) 
+			cudaFree(x);
+		for (auto x : dL_db)
+			cudaFree(x);
+		for (auto x : da_dg)
 			cudaFree(x);
 		// clean culbas hand
 		cublasDestroy(handle);

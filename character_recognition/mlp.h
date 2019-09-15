@@ -10,7 +10,6 @@ using namespace std;
 
 namespace CharacterRecognition {
     Common::PerformanceTimer& timer();
-#define classes 5
 	class Net {
 		// cublas
 		cublasHandle_t handle;
@@ -23,6 +22,10 @@ namespace CharacterRecognition {
 		int blocks;
 		int input_size, layer_count;
 		vector<int> layer_sizes;
+		// gradient variables
+		vector<float *> dL_dw; // g = x*w + b
+		vector<float *> dL_db; // g = x*w + b
+		vector<float *> da_dg; // activation function grads (dy_dg for the final layer)
 		// helperfunctions for the class
 
 		// Fill the array A(nr_rows_A, nr_cols_A) with random numbers on GPU
@@ -32,7 +35,7 @@ namespace CharacterRecognition {
 	public:
 		Net(int n, vector<int> layers);	// creates weight matrixs
 		float* forward(float *data, int n); // returns class
-		float backprop(int *output, int* ); // returns loss
+		void backprop(int *output); // returns loss
 		~Net(); // to delete the weights
 	};
     // TODO: implement required elements for MLP sections 1 and 2 here
