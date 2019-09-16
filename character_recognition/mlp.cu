@@ -159,7 +159,7 @@ namespace CharacterRecognition {
 			da_dg.push_back(dev_jac); // da/dg has dimensions output(g) * output(g) <Jacobian>
 		}
 		// initilizaton cublas handle
-		cublasCreate(&handle);
+		cublasCreate(&handle); 
 		// init final grad buffer
 		cudaMalloc((void**)&dL_dyhat, layers[params.layer_count] * sizeof(double));
 	}
