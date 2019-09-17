@@ -312,8 +312,11 @@ namespace CharacterRecognition {
 
 	}
 
-	double Net::loss(int *y) {
-		return -1;
+	double Net::loss(double *y_pred, double *y) {
+		double loss = 0;
+		for (int i = 0; i < params.layer_sizes[params.layer_count - 1]; i++)
+			loss += y[i] * log2(y_pred[i]);
+		return -loss;
 	}
 
 	Net::~Net() {

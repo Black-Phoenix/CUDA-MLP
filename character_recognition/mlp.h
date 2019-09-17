@@ -45,7 +45,10 @@ namespace CharacterRecognition {
 		Net(int n, vector<int> layers, double lr);	// creates weight matrixs
 		double* forward(double *data, int n); // returns class
 		void backprop(double *y); 
-		double Net::loss(int *y);
+		double Net::loss(double *y_pred, double *y);
+		void update_lr(int epoch, int max_epoch) { 
+
+		}
 		~Net(); // to delete the weights
 	};
     // TODO: implement required elements for MLP sections 1 and 2 here
