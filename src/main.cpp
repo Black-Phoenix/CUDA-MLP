@@ -83,12 +83,12 @@ int main(int argc, char* argv[]) {
 		auto x = nn.forward(input_data[i%classes], inputs);
 		//csv_write(i, nn.loss(x, output_data[i%classes]), "loss.csv");
 		total_loss += nn.loss(x, output_data[i%classes]);
-		if (i % classes == 0) {
+		if (i % classes == 0 && i) {
 			cout << i << ":" << total_loss/classes << endl;
 			total_loss = 0;
 		}
 		nn.backprop(output_data[i%classes]);
-		if (i % classes * 100 && !i) 
+		if (!(i % (classes * 100)) && i) 
 			nn.update_lr();
 		delete[] x;
 	}

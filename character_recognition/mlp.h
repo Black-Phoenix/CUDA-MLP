@@ -7,9 +7,8 @@
 using namespace std;
 #define checkCUDAErrorWithLine(msg) checkCUDAError(msg, __LINE__)
 
-
 namespace CharacterRecognition {
-    Common::PerformanceTimer& timer();
+	Common::PerformanceTimer& timer();
 	struct Params {
 		vector<int> layer_sizes;
 		int layer_count, input_size;
@@ -21,6 +20,8 @@ namespace CharacterRecognition {
 		// input data
 		double *dev_data;
 		double *dev_y;
+		double *dev_reduction_pow2;
+		bool read_dev_y;
 		// cublas
 		cublasHandle_t handle;
 		vector<double *> w;
@@ -45,6 +46,8 @@ namespace CharacterRecognition {
 		void GPU_fill_rand(double *A, int size, double std);
 		// multiplication of matrices
 		void gpu_blas_mmul(const double *A, const double *B, double *C, const int m, const int k, const int n, bool trans_flag_a = false, bool trans_flag_b = false);
+		// reduction invocation code
+		void Net::reduction(int n, double *dev_odata);
 	public:
 		Net(int n, vector<int> layers, double lr, double beta = -1);	// creates weight matrixs
 		double* forward(double *data, int n); // returns class
@@ -53,6 +56,4 @@ namespace CharacterRecognition {
 		void update_lr(); // halfs learning rate every x iterations
 		~Net(); // to delete the weights
 	};
-    // TODO: implement required elements for MLP sections 1 and 2 here
 }
-// From P1 of this assignment, shared memory scan (modified to use exponents of values
