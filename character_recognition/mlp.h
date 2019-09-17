@@ -12,6 +12,7 @@ namespace CharacterRecognition {
 	struct Params {
 		vector<int> layer_sizes;
 		int layer_count, input_size;
+		int output_size;
 		double lr, beta;
 		const static int block_size = 128;
 	};

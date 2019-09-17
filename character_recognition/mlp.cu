@@ -122,11 +122,11 @@ namespace CharacterRecognition {
 
 	/*From Stream compaction part of this assignment*/
 	__global__ void reduce_kern(int n, double *data, int d) {
-		unsigned long long int tmp_d = 1 << (d + 1);
-		unsigned long long int index = (blockDim.x * blockIdx.x + threadIdx.x)*tmp_d;
+		int tmp_d = 1 << (d + 1);
+		int index = (blockDim.x * blockIdx.x + threadIdx.x)*tmp_d;
 		if (index >= n)
 			return;
-		double tmp_data = data[index + (tmp_d >> 1) - 1];
+		double tmp_data = data[index + (tmp_d >> 1) - 1]; // saves a read or write
 		if (tmp_data == 0)
 			return;
 		data[index + tmp_d - 1] += tmp_data;
@@ -151,6 +151,7 @@ namespace CharacterRecognition {
 		// layers = {98, 52, 52}
 		params.layer_count = layers.size();
 		params.input_size = n;
+		params.output_size = layers[params.layer_count - 1];
 		params.lr = lr;
 		params.layer_sizes = layers;
 		if (beta != -1) {
@@ -161,8 +162,8 @@ namespace CharacterRecognition {
 			momentum_grad = false;
 		// init raw data holder
 		cudaMalloc((void**)&dev_data, n * sizeof(double));
-		cudaMalloc((void**)&dev_y, layers[params.layer_count - 1] * sizeof(double));
-		cudaMalloc((void**)&dev_reduction_pow2, 1<<(ilog2ceil(layers[params.layer_count - 1])) * sizeof(double));
+		cudaMalloc((void**)&dev_y, params.output_size * sizeof(double));
+		cudaMalloc((void**)&dev_reduction_pow2, 1<<(ilog2ceil(params.output_size)) * sizeof(double));
 		// add input layer to front
 		layers.insert(layers.begin(), n);
 		double *dev_w, *dev_b, *dev_z, *dev_a, *dev_da;
@@ -224,10 +225,6 @@ namespace CharacterRecognition {
 		}
 		// initilizaton cublas handle
 		cublasCreate(&handle); 
-		/*for (int i = 0; i < params.layer_count; i++) {
-			printCuda(w[i], (layers[i] * layers[i + 1]), "INIT W" + to_string(i));
-			printCuda(b[i], (layers[i + 1]), "INIT B" + to_string(i));
-		}*/
 		// set read_dev_y flag to false (i.e not read data)
 		read_dev_y = false;
 	}
@@ -250,13 +247,13 @@ namespace CharacterRecognition {
 	}
 
 	double* Net::forward(double *data, int n) {
-		double *res = new double[params.layer_sizes[params.layer_count - 1]]();
+		double *res = new double[params.output_size]();
 		assert(n == params.input_size);
 		// copy over data to process
 		cudaMemcpy(dev_data, data, n * sizeof(double), cudaMemcpyHostToDevice);
 		checkCUDAErrorWithLine("Cuda memcpy failed!");
 		// reset reduction buffer
-		cudaMemset(dev_reduction_pow2, 0, 1 << (ilog2ceil(params.layer_sizes[params.layer_count - 1])) * sizeof(double));
+		cudaMemset(dev_reduction_pow2 + params.output_size - 1, 0, ((1 << ilog2ceil(params.output_size)) - params.output_size + 1) * sizeof(double));
 		for (int i = 0; i < params.layer_count; i++) {
 			blocks = ceil((params.layer_sizes[i] + params.block_size - 1) / params.block_size);
 			// clear g, a for this layer
@@ -282,24 +279,15 @@ namespace CharacterRecognition {
 				checkCUDAErrorWithLine("relu failed!");
 			}
 			else {
-				exp_copy << <blocks, params.block_size >> > (params.layer_sizes[i], a[i], z[i]); // why do this anymore lol
+				exp_copy << <blocks, params.block_size >> > (params.layer_sizes[i], a[i], z[i]);
 				checkCUDAErrorWithLine("exp copy failed!");
 				cudaMemcpy(dev_reduction_pow2, a[i],params.layer_sizes[i]* sizeof(double), cudaMemcpyDeviceToDevice);
 				checkCUDAErrorWithLine("dev to dev copy failed!");
+				// modified scan to get the exponential sum of all elements (P1 of assignment used)
 				reduction(1 << ilog2ceil(params.layer_sizes[i]), dev_reduction_pow2);
 				double exp_sum;
 				cudaMemcpy(&exp_sum, dev_reduction_pow2 + (1 << ilog2ceil((params.layer_sizes[i]))) - 1, sizeof(double), cudaMemcpyDeviceToHost); // copy last value to cpu
 				checkCUDAErrorWithLine("Cuda memcpy failed!");
-				//// todo move this to the gpu this later
-				//double *tmp = new double[params.layer_sizes[i]];
-				//double exp_sum = 0;
-				//cudaMemcpy(tmp, z[i], params.layer_sizes[i] * sizeof(double), cudaMemcpyDeviceToHost); // used to be a[i]
-				//checkCUDAErrorWithLine("Cuda memcpy failed!");
-				//for (int pos = 0; pos < params.layer_sizes[i]; pos++)
-				//	exp_sum += exp(tmp[pos]);
-				//delete[] tmp;
-				//cout << exp_sum << endl;
-				// modified scan to get the exponential sum of all elements (P1 of assignment used!!)
 				// softmax activation
 				softmax_activation <<<blocks, params.block_size >>> (params.layer_sizes[i], z[i], a[i], exp_sum);
 				checkCUDAErrorWithLine("softmax failed!");
@@ -307,7 +295,8 @@ namespace CharacterRecognition {
 		}
 		cudaMemcpy(res, a[params.layer_count - 1], params.layer_sizes[params.layer_count - 1] * sizeof(double), cudaMemcpyDeviceToHost);
 		checkCUDAErrorWithLine("Cuda res memcpy failed!");
-		cudaMemset(dev_reduction_pow2, 0, 1 << (ilog2ceil(params.layer_sizes[params.layer_count - 1])) * sizeof(double));
+		// reset reduction buffer (we need to zero only the last part of the array
+		cudaMemset(dev_reduction_pow2 + params.output_size - 1, 0, ((1 << ilog2ceil(params.output_size)) - params.output_size + 1) * sizeof(double));
 		return res;
 	}
 
@@ -322,36 +311,29 @@ namespace CharacterRecognition {
 		for (int i = params.layer_count - 1; i >= 0; i--) {
 			n = params.layer_sizes[i];
 			blocks = ceil((n + params.block_size - 1) / params.block_size);
-			if (i == params.layer_count - 1) { // softmax
-				//printCuda(a[i], n, "A" + to_string(i));
+			if (i == params.layer_count - 1) { // softmax grad
 				bias_addition << <blocks, params.block_size >> > (n, a[i], dev_y, dL_dz[i], -1); // y_hat - y
 				checkCUDAErrorWithLine("bias addition failed!");
 			}
-			else { // relu 
-				//printCuda(z[i], n, "z"+to_string(i));
+			else { // relu grad
 				relu_grad<< <blocks, params.block_size >> > (n, z[i], d_relu[i]); // relu grad
 				checkCUDAErrorWithLine("relu grad failed!");
-				/*printCuda(d_relu[i], n, "d_relu" + to_string(i));
-				printCuda(dL_da[i], n, "dA" + to_string(i));*/
 				element_mult << <blocks, params.block_size >> > (n, d_relu[i], dL_da[i], dL_dz[i]); // dz = da * a'
 				checkCUDAErrorWithLine("element wise mult failed!");
 			}
-			if (i != 0) {
-				//printCuda(dL_dz[i], params.layer_sizes[i], "dL_dz" + to_string(i));
+			if (i != 0) { // a[i-1] exists + we need to calculate dL_da[i-1]
 				gpu_blas_mmul(dL_dz[i], a[i-1], dL_dw[i], params.layer_sizes[i], 1, params.layer_sizes[i-1], false, true); // dw
 				checkCUDAErrorWithLine("Matrix mult failed!");
-				//printCuda(dL_dw[i], params.layer_sizes[i] * params.layer_sizes[i - 1], "dL_dw" + to_string(i));
-				//printCuda(dL_da[i - 1], params.layer_sizes[i - 2], "dA" + to_string(i - 1) + " Prv loop");
 				gpu_blas_mmul(w[i], dL_dz[i], dL_da[i - 1], params.layer_sizes[i - 1], params.layer_sizes[i], 1, true, false); // da
 				checkCUDAErrorWithLine("Matrix mult failed!");
-				//printCuda(dL_da[i-1], params.layer_sizes[i-2], "dA" + to_string(i - 1) + " Prv loop");
 				checkCUDAErrorWithLine(("Print error failed! " + to_string(i)).c_str());
 			}
-			else {
+			else { // just need tp calculate dL_dw[i]
 				gpu_blas_mmul(dL_dz[i], dev_data, dL_dw[i], params.layer_sizes[i], 1, params.input_size, false, true); // dw
 				checkCUDAErrorWithLine("Matrix mult failed!");
 			}
 		}
+		// update weights in inverse order
 		for (int i = 0; i < params.layer_count; i++) {
 			int layer_im1;
 			if (i != 0)
@@ -398,17 +380,16 @@ namespace CharacterRecognition {
 	}
 	double Net::loss(double *y_pred, double *y) {
 		double loss = 0;
-		int n = params.layer_sizes[params.layer_count - 1];
 		if (!read_dev_y) {
-			cudaMemcpy(dev_y, y, params.layer_sizes[params.layer_count - 1] * sizeof(double), cudaMemcpyHostToDevice);
+			cudaMemcpy(dev_y, y, params.output_size * sizeof(double), cudaMemcpyHostToDevice);
 			checkCUDAErrorWithLine("Cuda memcpy failed!");
 			read_dev_y = true;
 		}
-		blocks = ceil((n + params.block_size - 1) / params.block_size);
-		cross_entropy_kernal <<< blocks, params.block_size>>> (n, dev_y, a[params.layer_count - 1], dev_reduction_pow2);
+		blocks = ceil((params.output_size + params.block_size - 1) / params.block_size);
+		cross_entropy_kernal <<< blocks, params.block_size>>> (params.output_size, dev_y, a[params.layer_count - 1], dev_reduction_pow2);
 		// reduction to get sum
-		reduction(1 << ilog2ceil(n), dev_reduction_pow2);
-		cudaMemcpy(&loss, dev_reduction_pow2 + (1 << ilog2ceil(n)) - 1, sizeof(double), cudaMemcpyDeviceToHost);
+		reduction(1 << ilog2ceil(params.output_size), dev_reduction_pow2);
+		cudaMemcpy(&loss, dev_reduction_pow2 + (1 << ilog2ceil(params.output_size)) - 1, sizeof(double), cudaMemcpyDeviceToHost);
 		return -loss;
 	}
 
