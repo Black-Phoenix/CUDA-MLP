@@ -12,7 +12,7 @@ CUDA Character Recognition
 ### Overview
 This code creates a fully connected neural network in **CUDA** which can identify the character from the image. For training this network, 52 images (1 for each letter case) were used along with random rotations (± 10°) were used. The results show that the network was able to identify the character with a 100% accuracy. 
 
-![Sample Network](.\img\sample_network.PNG)
+![Sample Network](./img/sample_network.PNG)
 
 ### Architecture
 
@@ -28,11 +28,11 @@ Between the layers, ReLu was the activation function used and softmax as the fin
 ### Neural Network overview
 
 Neural networks are multi-layer networks of neurons (the blue and magenta nodes in the chart below) that we use to classify things, make predictions, etc. Each neuron activates on features, and the cascading of said neurons allows the network to activate on more complex representations of the input data. In a neural network, the final layer does the job of a support vector machine, which draws a hyperplane to classify the data (if that is the task). 
-![Neural Network](.\img\MLP.png)
+![Neural Network](./img/MLP.png)
 
 #### Neuron
 A neuron is the building block of a neural network. It takes in a value and returns a nonlinear transformation of the input. We define a layer as a stack of neurons. The nonlinearity is the crucial part because you can show that any linear combination of layers can be simplified down to just 1 layer.
-![Forward pass](.\img\Weighting.png)
+![Forward pass](./img/Weighting.png)
 
 #### Activation functions
 
@@ -44,7 +44,7 @@ For the final layer, I decided to use a softmax activation function because we a
 
 To use the network for inference, the forward pass through the network is used. Input data is passed into the network and at each layer, the weight matrix (w) and the bias is added (b). The equations for the forward prop are shown below:
 
-![](.\img\fp.png)
+![](./img/fp.png)
 
 #### Back propagation
 
@@ -52,10 +52,10 @@ To actually train the network, we need to update the weights and biases. This is
 
 The gradients are shown below:
 
-![Back Prop gradients](.\img\bp.png)
+![Back Prop gradients](./img/bp.png)
 
 Once we have the gradients, we use the following equation to update the weights and biases
-![Gradient decent equation](.\img\gradient_decent.png)
+![Gradient decent equation](./img/gradient_decent.png)
 
 ### Modifications
 
@@ -65,7 +65,7 @@ Besides getting the base neural network to work, listed below are some of the mo
 
 Regular gradient decent has a tendency of pulling the value rather quickly. This can result in loss curves being jagged. To combat this, SGD was implemented. The idea is that while updating the weights and biases. This changes the update equation to weight the last update along with the new update. This adds another hyper parameter β
 
-![SGD](.\img\SGD.png)
+![SGD](./img/SGD.png)
 
 #### Adaptive learning rate
 
@@ -75,7 +75,7 @@ During gradient decent, the learning rate has a huge impact on the training perf
 
 For the softmax layer, the equation for the layer is given by
 
-![Softmax](.\img\softmax.png)
+![Softmax](./img/softmax.png)
 
 The denominator of this involves a sum over all the elements in the array. To do this, I used the upsweep phase of the work efficient scan I implemented as part of this assignment to allow for the sum to be calculated on the GPU (rather than actually copying it over to the CPU). The same function is also used to calculate the cross entropy loss (which also has a summation inside it).
 
@@ -96,7 +96,7 @@ Another optimization done to the code was that all equations for the gradient pr
 
 #### Hyper Parameters
 
-Here are the list of hyper parameters that had the network working at 100% accuracy (Weights for these parameters were given)
+Here are the list of hyper parameters that had the network working at 100% accuracy (Weights and biases for these parameters were given in weights.csv)
 
 | Parameter Name              | Value                            |
 | --------------------------- | -------------------------------- |
@@ -114,19 +114,23 @@ Here are the list of hyper parameters that had the network working at 100% accur
 
 #### Loss vs Epochs
 
-![Loss vs Epoch](.\img\loss_vs_epoch.png)
+![Loss vs Epoch](./img/loss_vs_epoch.png)
 
-In this plot, it is clear that the loss with momentum and decay performed the best. The kink in the middle (I believe) was due to suboptimal tuning of the decay rate. With a little more tuning the rate would decay slightly faster to allow for the drop but not the oscillation. The raw data is also uploaded. One important thing to mention was that with the pure learning rate approach, the max correct it got (for this run) was 51 out of 52 characters. This is not always the case (I have seen it getting a full but it requires more time). For the speed, the code can run 1 forward pass in **1.13577 ms** and 1 backward pass in  and **0.505299 ms**  average (with the architecture mentioned above).  
+In this plot, it is clear that the loss with momentum and decay performed the best. The kink in the middle (I believe) was due to suboptimal tuning of the decay rate. With a little more tuning the rate would decay slightly faster to allow for the drop but not the oscillation. The raw data is also uploaded. One important thing to mention was that with the pure learning rate approach, the max correct it got (for this run) was 51 out of 52 characters. This is not always the case (I have seen it getting a full but it requires more time). The other methods achieve a 100% accuracy (shown below) on the dataset given.
 
- Try diff architectures
+![Accuracy](./img/regulat_acc.PNG)
+
+For the speed, the code can run 1 forward pass in **1.13577 ms** and 1 backward pass in  and **0.505299 ms**  average (with the architecture mentioned above).  
+
+
 
 ### Rotation loss plots (given more iterations)
 
-![Loss vs Epochs for random rotations](.\img\loss_vs_epoch_rand.PNG)
+![Loss vs Epochs for random rotations](./img/loss_vs_epoch_rand.PNG)
 
 For the above plot, a random rotation of ± 10°  was given to the training data. The performance of this was 52 out of 52 cases (shown below), which is amazing considering it took the same number of iterations!
 
-![Rot acc](.\img\rotation_matrix_acc.PNG)
+![Rot acc](./img/rotation_matrix_acc.PNG)
 
 ### Observations
 
