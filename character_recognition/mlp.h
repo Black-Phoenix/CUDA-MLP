@@ -19,25 +19,28 @@ namespace CharacterRecognition {
 	class Net {
 		// input data
 		double *dev_data;
+		double *dev_y;
 		// cublas
 		cublasHandle_t handle;
 		vector<double *> w;
 		vector<double *> b;
 		// intermediate results
-		vector<double *> g;
-		vector<double *> a;
+		vector<double *> z; // z = w * x + b
+		vector<double *> a; // 
 		int blocks;
 		// gradient variables
-		vector<double *> dL_dg;
-		vector<double *> da_dg; // activation function grads (dy_dg for the final layer)
-		double * dL_dyhat;
+		vector<double *> dL_dz; // z = wx + b
+		vector<double *> dL_da; // activation function grads (dy_dg for the final layer)
+		vector<double *> dL_dw; 
+		// relu gradient
+		vector<double *> d_relu;
 		// parameters
 		Params params;
 		// helperfunctions for the class
 		// Fill the array A(nr_rows_A, nr_cols_A) with random numbers on GPU
 		void GPU_fill_rand(double *A, int size, double std);
 		// multiplication of matrices
-		void gpu_blas_mmul(const double *A, const double *B, double *C, const int m, const int k, const int n);
+		void gpu_blas_mmul(const double *A, const double *B, double *C, const int m, const int k, const int n, bool trans_flag_a = false, bool trans_flag_b = false);
 	public:
 		Net(int n, vector<int> layers, double lr);	// creates weight matrixs
 		double* forward(double *data, int n); // returns class

@@ -14,9 +14,9 @@
 //#include <opencv2/core/core.hpp>
 #include <windows.h>
 //#include <opencv2/highgui/highgui.hpp>
-#define inputs 196
-#define classes 52
-#define lr 0.2
+#define inputs 2
+#define classes 2
+#define lr 0.007
 using namespace std;
 //int image_read(string path) {
 //	cv::Mat image = cv::imread(path.c_str(), 0);
@@ -53,16 +53,26 @@ int main(int argc, char* argv[]) {
 	for (auto x : files)
 		cout << x << endl;*/
 	// test forward pass
-	CharacterRecognition::Net nn(inputs, {98, 52, 52, classes}, lr);
-	double data[inputs] = {0};
-	auto x = nn.forward(data, inputs);
-//	nn.backprop(data);
-	double sum = 0;
-	for (int i = 0; i < classes; i++) {
-		cout << x[i] << ", " << endl;
-		sum += x[i];
+	CharacterRecognition::Net nn(inputs, {4, 3, classes}, lr);
+	double input[4][2] = { {0, 0}, {0, 1}, { 1,0 }, {1, 1} };
+	double output[4][2] = { {0, 1}, {1,0}, {1,0}, {0, 1} };
+	int i;
+	for (i = 0; i < 4000; i++) {
+		auto x = nn.forward(input[i%4], inputs);
+		nn.backprop(output[i % 4]);
+	//	cout << output[i % 4][0] << ", " << output[i % 4][1] << ":";
+		//cout << x[0] << ", " << x[1] <<endl;
+		/*if (x[0] > x[1])
+			cout << i << ((output[i % 4][0] == 1) ? "Works" : "Fail") <<endl;
+		else
+			cout << i << ((output[i % 4][0] == 0)?"Works":"Fail") << endl;*/
+		delete[] x;
 	}
-	cout << sum << endl;
-	delete[] x;
+	int count = 0;
+	for (int i = 0; i < 4; i++) {
+		auto x = nn.forward(input[i], inputs);
+		count += ((x[0] > 0.5) == output[i][0]);
+	}
+	cout << "Passes " << count << " Out of 4";
 	return 0;
 }
