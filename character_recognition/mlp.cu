@@ -8,8 +8,8 @@
 #include <memory>
 #include <string>
 #include <iostream>
+#include <fstream>
 
-// kernals
 namespace CharacterRecognition {
 #define enable_debug true
 	using Common::PerformanceTimer;
@@ -18,7 +18,9 @@ namespace CharacterRecognition {
 		static PerformanceTimer timer;
 		return timer;
 	}
-
+	//////////////////////////////
+	/*		DEBUGGING			*/
+	//////////////////////////////
 	void printCuda(double *a1, int n, string name) {
 		if (!enable_debug)
 			return;
@@ -174,7 +176,7 @@ namespace CharacterRecognition {
 			cudaMalloc((void**)&dev_b, (layers[i + 1]) * sizeof(double));
 			checkCUDAErrorWithLine("Cuda malloc failed!");
 			// initilize w, b using gaussian distribution
-			GPU_fill_rand(dev_w, layers[i] * layers[i + 1], 2.0 / layers[i]); // uniform random initilization
+			GPU_fill_rand(dev_w, layers[i] * layers[i + 1], 2.0 / (layers[i])); // uniform random initilization
 			// memset dev_b
 			blocks = (layers[i + 1] + params.block_size - 1) / params.block_size;
 			memset << <blocks, params.block_size >> > (layers[i + 1], dev_b, 0.1);
@@ -247,6 +249,7 @@ namespace CharacterRecognition {
 	}
 
 	double* Net::forward(double *data, int n) {
+		timer().startGpuTimer();
 		double *res = new double[params.output_size]();
 		assert(n == params.input_size);
 		// copy over data to process
@@ -279,7 +282,7 @@ namespace CharacterRecognition {
 				checkCUDAErrorWithLine("relu failed!");
 			}
 			else {
-				exp_copy << <blocks, params.block_size >> > (params.layer_sizes[i], a[i], z[i]);
+				exp_copy <<<blocks, params.block_size >>> (params.layer_sizes[i], a[i], z[i]);
 				checkCUDAErrorWithLine("exp copy failed!");
 				cudaMemcpy(dev_reduction_pow2, a[i],params.layer_sizes[i]* sizeof(double), cudaMemcpyDeviceToDevice);
 				checkCUDAErrorWithLine("dev to dev copy failed!");
@@ -297,10 +300,12 @@ namespace CharacterRecognition {
 		checkCUDAErrorWithLine("Cuda res memcpy failed!");
 		// reset reduction buffer (we need to zero only the last part of the array
 		cudaMemset(dev_reduction_pow2 + params.output_size - 1, 0, ((1 << ilog2ceil(params.output_size)) - params.output_size + 1) * sizeof(double));
+		timer().endGpuTimer();
 		return res;
 	}
 
 	void Net::backprop(double *y) {
+		timer().startGpuTimer();
 		// calculate loss grad
 		int n = -1;
 		if (!read_dev_y) {
@@ -368,7 +373,9 @@ namespace CharacterRecognition {
 			}
 		}
 		read_dev_y = false; // for next cycle
+		timer().endGpuTimer();
 	}
+
 	void Net::reduction(int n, double *dev_odata) {
 		// reduce phase
 		for (int d = 0; d <= ilog2ceil(n) - 1; d++) {
@@ -378,6 +385,7 @@ namespace CharacterRecognition {
 			checkCUDAErrorWithLine("reduce phase failed!");
 		}
 	}
+
 	double Net::loss(double *y_pred, double *y) {
 		double loss = 0;
 		if (!read_dev_y) {
@@ -395,6 +403,38 @@ namespace CharacterRecognition {
 
 	void Net::update_lr() {
 		params.lr /= 2;
+	}
+
+	void Net::dump_weights(string path) {
+		std::ofstream outfile;
+		outfile.open(path, std::ios_base::app);
+		for (int i = 0; i < params.layer_count; i++) {
+			int lmi;
+			if (i != 0)
+				lmi = params.layer_sizes[i - 1];
+			else
+				lmi = params.input_size;
+			int n = params.layer_sizes[i] * lmi;
+			double *print_a = new double[n];
+			outfile << "W["+to_string(i) + "]" << endl;
+			outfile << "-----" << endl;
+			cudaMemcpy(print_a, w[i], n * sizeof(double), cudaMemcpyDeviceToHost);
+			for (int i = 0; i < n; i++) {
+				outfile << print_a[i] << endl;
+			}
+			delete[] print_a;
+		}
+		for (int i = 0; i < params.layer_count; i++) {
+			int n = params.layer_sizes[i];
+			double *print_a = new double[n];
+			outfile << "b[" + to_string(i) + "]" << endl;
+			outfile << "-----" << endl;
+			cudaMemcpy(print_a, w[i], n * sizeof(double), cudaMemcpyDeviceToHost);
+			for (int i = 0; i < n; i++) {
+				outfile <<  print_a[i] << endl;
+			}
+			delete[] print_a;
+		}
 	}
 
 	Net::~Net() {
