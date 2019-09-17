@@ -13,10 +13,11 @@ namespace CharacterRecognition {
 	struct Params {
 		vector<int> layer_sizes;
 		int layer_count, input_size;
-		double lr;
+		double lr, beta;
 		const static int block_size = 128;
 	};
 	class Net {
+		bool momentum_grad; // just a flag for momentum
 		// input data
 		double *dev_data;
 		double *dev_y;
@@ -32,6 +33,9 @@ namespace CharacterRecognition {
 		vector<double *> dL_dz; // z = wx + b
 		vector<double *> dL_da; // activation function grads (dy_dg for the final layer)
 		vector<double *> dL_dw; 
+		// momentum gradients
+		vector<double *> vdb;
+		vector<double *> vdw;
 		// relu gradient
 		vector<double *> d_relu;
 		// parameters
@@ -42,13 +46,11 @@ namespace CharacterRecognition {
 		// multiplication of matrices
 		void gpu_blas_mmul(const double *A, const double *B, double *C, const int m, const int k, const int n, bool trans_flag_a = false, bool trans_flag_b = false);
 	public:
-		Net(int n, vector<int> layers, double lr);	// creates weight matrixs
+		Net(int n, vector<int> layers, double lr, double beta = -1);	// creates weight matrixs
 		double* forward(double *data, int n); // returns class
 		void backprop(double *y); 
 		double Net::loss(double *y_pred, double *y);
-		void update_lr(int epoch, int max_epoch) { 
-
-		}
+		void update_lr(); // halfs learning rate every x iterations
 		~Net(); // to delete the weights
 	};
     // TODO: implement required elements for MLP sections 1 and 2 here

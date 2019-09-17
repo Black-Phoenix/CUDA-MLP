@@ -17,10 +17,12 @@
 #include <windows.h>
 #include <fstream>
 
-#define inputs 196
 #define classes 52
 #define epochs 40000
-#define in_dim 14
+#define in_dim 15
+#define inputs in_dim*in_dim
+#define lr 0.0038
+#define beta 0.65
 using namespace std;
 
 int image_read(string path, vector<double *> &data) {
@@ -73,8 +75,8 @@ int main(int argc, char* argv[]) {
 		if (image_read(path + x, input_data))
 			lable_read(x, output_data);
 	// test forward pass
-	double lr = 0.003;
-	CharacterRecognition::Net nn(inputs, {98, 65, 50, 25, 40, classes}, lr);
+	
+	CharacterRecognition::Net nn(inputs, {98, 65, 50, 30, 25, 40, classes}, lr, beta);
 	int i;
 	float total_loss = 0;
 	for (i = 0; i < epochs; i++) {
@@ -86,9 +88,8 @@ int main(int argc, char* argv[]) {
 			total_loss = 0;
 		}
 		nn.backprop(output_data[i%classes]);
-		/*for (int j = 0; j < classes; j++)
-			cout << x[j] << " ";
-		cout << endl;*/
+		if (i % classes * 100 && !i) 
+			nn.update_lr();
 		delete[] x;
 	}
 	int val = 0;

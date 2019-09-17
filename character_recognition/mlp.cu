@@ -105,6 +105,13 @@ namespace CharacterRecognition {
 			return;
 		data[index] = value;
 	}
+
+	__global__ void update_momentum(int n, double *vdw, double *dL_dw, double beta) {
+		int index = blockIdx.x * blockDim.x + threadIdx.x;
+		if (index >= n)
+			return;
+		vdw[index] = beta * vdw[index] + (1 - beta) * dL_dw[index];
+	}
 	//////////////////////////////
 	/*			Helper			*/
 	//////////////////////////////
@@ -121,12 +128,18 @@ namespace CharacterRecognition {
 		curandGenerateNormalDouble(prng, A, size, 0, std);
 	}
 
-	Net::Net(int n, vector<int> layers, double lr) {
+	Net::Net(int n, vector<int> layers, double lr, double beta) {
 		// layers = {98, 52, 52}
 		params.layer_count = layers.size();
 		params.input_size = n;
 		params.lr = lr;
 		params.layer_sizes = layers;
+		if (beta != -1) {
+			momentum_grad = true;
+			params.beta = beta;
+		}
+		else
+			momentum_grad = false;
 		// init raw data holder
 		cudaMalloc((void**)&dev_data, n * sizeof(double));
 		cudaMalloc((void**)&dev_y, layers[params.layer_count - 1] * sizeof(double));
@@ -143,6 +156,7 @@ namespace CharacterRecognition {
 			// memset dev_b
 			blocks = (layers[i + 1] + params.block_size - 1) / params.block_size;
 			memset << <blocks, params.block_size >> > (layers[i + 1], dev_b, 0.1);
+			checkCUDAErrorWithLine("Memset failed!");
 			//GPU_fill_rand(dev_b, layers[i + 1], 2.0 / layers[i]); // zero initilizaton is fine for biases
 			// push into vector
 			w.push_back(dev_w);
@@ -171,6 +185,21 @@ namespace CharacterRecognition {
 			cudaMalloc((void**)&dev_z, (layers[i + 1]) * sizeof(double));
 			checkCUDAErrorWithLine("Cuda malloc failed!");
 			d_relu.push_back(dev_z);
+			// momentum variables
+			if (momentum_grad) {
+				// Vb
+				cudaMalloc((void**)&dev_z, (layers[i + 1]) * sizeof(double));
+				checkCUDAErrorWithLine("Malloc failed!");
+				memset << <blocks, params.block_size >> > (layers[i + 1], dev_z, 0);// zero position because it is a running buffer
+				checkCUDAErrorWithLine("Memset failed!");
+				vdb.push_back(dev_z);
+				// Vw
+				blocks = ((layers[i] * layers[i + 1]) + params.block_size - 1) / params.block_size;
+				cudaMalloc((void**)&dev_w, (layers[i] * layers[i + 1]) * sizeof(double));
+				memset << <blocks, params.block_size >> > ((layers[i] * layers[i + 1]), dev_w, 0); // zero position because it is a running buffer
+				checkCUDAErrorWithLine("Cuda malloc failed!");
+				vdw.push_back(dev_w);
+			}
 		}
 		// initilizaton cublas handle
 		cublasCreate(&handle); 
@@ -297,17 +326,29 @@ namespace CharacterRecognition {
 			// W
 			n = params.layer_sizes[i] * layer_im1;
 			blocks = ceil((n + params.block_size - 1) / params.block_size);
-			update_params << <blocks, params.block_size >> > (n, w[i], dL_dw[i], params.lr);
-			checkCUDAErrorWithLine("Update w failed!");
+			if (momentum_grad) {
+				update_momentum <<<blocks, params.block_size >>> (n, vdw[i], dL_dw[i], params.beta);
+				checkCUDAErrorWithLine("Update momentum vw failed!");
+				update_params << <blocks, params.block_size >> > (n, w[i], vdw[i], params.lr);
+				checkCUDAErrorWithLine("Update w failed!");
+			}
+			else {
+				update_params << <blocks, params.block_size >> > (n, w[i], dL_dw[i], params.lr);
+				checkCUDAErrorWithLine("Update w failed!");
+			}
 			//B
 			n = params.layer_sizes[i];
 			blocks = ceil((n + params.block_size - 1) / params.block_size);
-			update_params << <blocks, params.block_size >> > (n, b[i], dL_dz[i], params.lr);
-			checkCUDAErrorWithLine("Update b failed!");
-			// print grads
-			//printCuda(dL_dw[i], layer_im1 * params.layer_sizes[i], "Grad W" + to_string(i));
-			//printCuda(dL_dz[i], params.layer_sizes[i], "Grad b"+to_string(i));
-			checkCUDAErrorWithLine("Print failed!");
+			if (momentum_grad) {
+				update_momentum << <blocks, params.block_size >> > (n, vdb[i], dL_dz[i], params.beta);
+				checkCUDAErrorWithLine("Update momentum vb failed!");
+				update_params << <blocks, params.block_size >> > (n, b[i], vdb[i], params.lr);
+				checkCUDAErrorWithLine("Update b failed!");
+			}
+			else {
+				update_params << <blocks, params.block_size >> > (n, b[i], dL_dz[i], params.lr);
+				checkCUDAErrorWithLine("Update b failed!");
+			}
 		}
 
 	}
@@ -317,6 +358,10 @@ namespace CharacterRecognition {
 		for (int i = 0; i < params.layer_sizes[params.layer_count - 1]; i++)
 			loss += y[i] * log2(y_pred[i]);
 		return -loss;
+	}
+
+	void Net::update_lr() {
+		params.lr /= 2;
 	}
 
 	Net::~Net() {
@@ -338,6 +383,11 @@ namespace CharacterRecognition {
 		for (auto x : dL_dw)
 			cudaFree(x);
 		for (auto x : d_relu)
+			cudaFree(x);
+		// free momentum variables
+		for (auto x : vdw)
+			cudaFree(x);
+		for (auto x : vdb)
 			cudaFree(x);
 		cudaFree(dev_data);
 		cudaFree(dev_y);
