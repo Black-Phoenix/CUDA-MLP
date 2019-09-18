@@ -19,12 +19,12 @@
 #include <random>
 
 #define classes 26
-#define epochs 400000
+#define epochs 4000
 #define in_dim 15
 #define inputs in_dim*in_dim
 #define lr 0.004
 #define beta 0.35
-#define char_74k true
+#define char_74k false
 
 using namespace std;
 
@@ -169,7 +169,7 @@ void lable_read74k(string name, vector<double *> &data) {
 
 int main(int argc, char* argv[]) {
 	// load image paths
-	string path = R"(..\74k_dataset_stripped\)";// change to ..\data-set\ for regular dataset
+	string path = R"(..\data-set\)";// change to ..\data-set\ for regular dataset
 	vector<string> files;
 	vector<double *> input_data;
 	vector<double *> output_data;
@@ -185,13 +185,16 @@ int main(int argc, char* argv[]) {
 
 		}
 	// forward pass
-	CharacterRecognition::Net nn(inputs, {100, 80, 65, 50, 40, 30, 30, 40, classes}, lr, beta);
+	CharacterRecognition::Net nn(inputs, {98, 60, 50, 40, 30, classes}, lr, beta);
 	int i;
 	float total_loss = 0;
 	for (i = 0; i < epochs; i++) {
-			//random_training_rot(path, nn, files, total_loss, i);
-			//sequential_training(nn, input_data, output_data, total_loss, i);
-			random_training(nn, input_data, output_data, total_loss, i);
+			if(char_74k)
+				random_training(nn, input_data, output_data, total_loss, i);
+			else {
+				//random_training_rot(path, nn, files, total_loss, i);
+				sequential_training(nn, input_data, output_data, total_loss, i);
+			}
 	}
 	cout << " Avg forward = " << avg_time_forward / epochs << ", Avg backward = " << avg_time_backward / epochs << endl;
 	int val = 0;
