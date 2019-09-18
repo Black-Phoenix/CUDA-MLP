@@ -132,7 +132,7 @@ For the above plot, a random rotation of ± 10°  was given to the training data
 
 ![Rot acc](./img/rotation_matrix_acc.PNG)
 
-### Observations
+### Observations & Random Thoughts
 
 #### Neural network occasionally struggle with "L" and "h"
 
@@ -142,3 +142,10 @@ For some reason, with just gradient decent my network had a hard time distinguis
 
 Cublas API isn't well documented. It took me a long long time to get matrix multiplication along with transpose working.
 
+#### 74K Character dataset Attempt
+
+With 1 hour left, I decided to run my network on a subset of the 74K Character dataset ([link](http://www.ee.surrey.ac.uk/CVSSP/demos/chars74k/)), which is a dataset with hand written characters. For this dataset, the training and testing data were sperate. For testing, each class has 54 examples and 1 testing example. With 400,000 epochs (10x more than was previously used), the neural network was able to identify 3 out of 26 (upper case hand written characters)
+
+Possible reasons for such a poor performance is due to the network not being deep enough, not enough training examples per class, not using batches (batch normalization) to train the network (group multiple inputs and compute the gradients at the same time). Whatever the case, the network didn't perform very well, and the loss plot is shown below.
+
+![74k Fail](./img/loss_vs_epoch_74k.PNG)

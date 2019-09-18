@@ -18,13 +18,16 @@
 #include <fstream>
 #include <random>
 
-#define classes 52
-#define epochs 40000
+#define classes 26
+#define epochs 400000
 #define in_dim 15
 #define inputs in_dim*in_dim
-#define lr 0.0038
-#define beta 0.65
+#define lr 0.004
+#define beta 0.35
+#define char_74k true
+
 using namespace std;
+
 float avg_time_forward = 0, avg_time_backward = 0;
 
 int image_read(string path, vector<double *> &data) {
@@ -46,6 +49,7 @@ double * image_read_rot(string path, int rot) {
 	if (!image.data)                              // Check for invalid input
 	{
 		cout << "Could not open or find the image" << std::endl;
+		cout << "failed on " << path << endl;
 		return 0;
 	}
 	double *data = new double[inputs];
@@ -71,7 +75,7 @@ void read_directory(const std::string& name, vector<string>& v) {
 	HANDLE hFind;
 	if ((hFind = FindFirstFile(pattern.c_str(), &data)) != INVALID_HANDLE_VALUE) {
 		do {
-			if (string(data.cFileName).find("bmp") != std::string::npos)
+			if (string(data.cFileName).find("bmp") != std::string::npos || string(data.cFileName).find("png") != std::string::npos)
 				v.push_back(data.cFileName);
 		} while (FindNextFile(hFind, &data) != 0);
 		FindClose(hFind);
@@ -92,9 +96,9 @@ double * lable_read(string name) {
 	return data;
 }
 int random_int(int min, int max) {
-	static std::random_device dev;
-	static std::mt19937 rng(dev());
-	static std::uniform_int_distribution<std::mt19937::result_type> uint_dist(min, max); // distribution in range [1, 6]
+	std::random_device dev;
+	std::mt19937 rng(dev());
+	std::uniform_int_distribution<std::mt19937::result_type> uint_dist(min, max); // distribution in range [1, 6]
 	return uint_dist(rng);
 }
 
@@ -115,7 +119,25 @@ void sequential_training(CharacterRecognition::Net &nn, vector<double *> &input_
 	delete[] x;
 }
 
-void random_training(string path, CharacterRecognition::Net &nn, const vector<string> &files, float &total_loss, int n) {
+void random_training(CharacterRecognition::Net &nn, vector<double *> &input_data,
+	vector<double *> &output_data, float &total_loss, int i) {
+	int n = random_int(0, input_data.size() - 1);
+	auto x = nn.forward(input_data[n], inputs);
+	avg_time_forward += CharacterRecognition::timer().getGpuElapsedTimeForPreviousOperation();
+	total_loss += nn.loss(x, output_data[n]);
+	if (i % classes == 0 && i) {
+		cout << i << ":" << total_loss / classes << endl;
+		csv_write(i, total_loss / classes, "loss_momentum.csv");
+		total_loss = 0;
+	}
+	/*if (!(i % (classes * 100)) && i)
+		nn.update_lr();*/
+	nn.backprop(output_data[n]);
+	avg_time_backward += CharacterRecognition::timer().getGpuElapsedTimeForPreviousOperation();
+	delete[] x;
+}
+
+void random_training_rot(string path, CharacterRecognition::Net &nn, const vector<string> &files, float &total_loss, int n) {
 	int i = random_int(0, classes - 1);
 	int rot = random_int(-10, 10);// +- 10 degree rotation
 	string name = path + string(files[i]);
@@ -138,33 +160,74 @@ void random_training(string path, CharacterRecognition::Net &nn, const vector<st
 	delete[] x;
 }
 
+void lable_read74k(string name, vector<double *> &data) {
+	int value = stoi(name.substr(3, 3));
+	data.push_back(new double[classes]);
+	memset(data[data.size() - 1], 0, classes * sizeof(double));
+	data[data.size() - 1][value - 11] = 1;
+}
+
 int main(int argc, char* argv[]) {
 	// load image paths
-	string path = R"(..\data-set\)";
+	string path = R"(..\74k_dataset_stripped\)";// change to ..\data-set\ for regular dataset
 	vector<string> files;
 	vector<double *> input_data;
 	vector<double *> output_data;
 	read_directory(path, files);
 	for (auto x : files)
-		if (image_read(path + x, input_data))
-			lable_read(x, output_data);
-	
+		if (image_read(path + x, input_data)) {
+			cout << x << endl;
+			if(!char_74k)
+				lable_read(x, output_data);
+			else {
+				lable_read74k(x, output_data);
+			}
+
+		}
 	// forward pass
-	CharacterRecognition::Net nn(inputs, {98, 65, 50, 30, 25, 40, classes}, lr, beta);
+	CharacterRecognition::Net nn(inputs, {100, 80, 65, 50, 40, 30, 30, 40, classes}, lr, beta);
 	int i;
 	float total_loss = 0;
 	for (i = 0; i < epochs; i++) {
-		//random_training(path, nn, files, total_loss, i);
-		sequential_training(nn, input_data, output_data, total_loss, i);
+			//random_training_rot(path, nn, files, total_loss, i);
+			//sequential_training(nn, input_data, output_data, total_loss, i);
+			random_training(nn, input_data, output_data, total_loss, i);
 	}
 	cout << " Avg forward = " << avg_time_forward / epochs << ", Avg backward = " << avg_time_backward / epochs << endl;
 	int val = 0;
-	for (int i = 0; i < classes; i++) {
-		double* x = nn.forward(input_data[i], inputs);
-		int pos1 = distance(x, max_element(x, x + classes));
-		int pos2 = distance(output_data[i], max_element(output_data[i], output_data[i] + classes));
-		val += (bool)(pos1 == pos2);
-		delete[] x;
+	if (!char_74k) {
+		for (int i = 0; i < classes; i++) {
+			double* x = nn.forward(input_data[i], inputs);
+			int pos1 = distance(x, max_element(x, x + classes));
+			int pos2 = distance(output_data[i], max_element(output_data[i], output_data[i] + classes));
+			val += (bool)(pos1 == pos2);
+			delete[] x;
+		}
+	}
+	else {
+		// read validation data
+		string path = R"(..\74k_dataset_test\)";// change to ..\data-set\ for regular dataset
+		vector<string> files;
+		vector<double *> input_data_test;
+		vector<double *> output_data_test;
+		read_directory(path, files);
+		for (auto x : files)
+			if (image_read(path + x, input_data_test)) {
+				cout << x << endl;
+				lable_read74k(x, output_data_test);
+
+			}
+		for (int i = 0; i < input_data_test.size(); i++) {
+			double* x = nn.forward(input_data_test[i], inputs);
+			int pos1 = distance(x, max_element(x, x + classes));
+			int pos2 = distance(output_data_test[i], max_element(output_data_test[i], output_data_test[i] + classes));
+			val += (bool)(pos1 == pos2);
+			delete[] x;
+		}
+		for (auto x : input_data_test)
+			delete[] x;
+		for (auto x : output_data_test)
+			delete[] x;
 	}
 	cout << "Passes " << val << " Out of "<<classes;
 	nn.dump_weights("weights.csv");
