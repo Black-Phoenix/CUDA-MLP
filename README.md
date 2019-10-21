@@ -32,7 +32,8 @@ Neural networks are multi-layer networks of neurons (the blue and magenta nodes 
 
 #### Neuron
 A neuron is the building block of a neural network. It takes in a value and returns a nonlinear transformation of the input. We define a layer as a stack of neurons. The nonlinearity is the crucial part because you can show that any linear combination of layers can be simplified down to just 1 layer.
-![Forward pass](./img/Weighting.png)
+
+![Forward pass](./img/Weighting.PNG)
 
 #### Activation functions
 
